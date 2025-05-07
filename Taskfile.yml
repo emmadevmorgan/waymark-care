@@ -1,0 +1,67 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  init:
+    desc: "Initialize the project"
+    silent: true
+    cmds:
+      - task: docker:up
+      - cmd: echo "Waiting for RabbitMQ to start..."
+      - cmd: sleep 30
+      - task: init-rabbitmq
+      - task: load-fhir
+
+  docker:up:
+    desc: "Bring up the docker containers"
+    dir: docker
+    cmds:
+      - docker compose up -d
+
+  docker:down:
+    desc: "Bring down the docker containers"
+    dir: docker
+    cmds:
+      - docker compose down
+
+  init-rabbitmq:
+    dir: docker
+    ignore_error: true
+    cmds:
+      - docker compose exec rabbitmq rabbitmqctl add_user app_user rabbitmq
+      - docker compose exec rabbitmq rabbitmqctl set_user_tags app_user administrator
+      - docker compose exec rabbitmq rabbitmqctl add_vhost homework
+      - docker compose exec rabbitmq rabbitmqctl set_permissions -p homework admin ".*" ".*" ".*"
+      - docker compose exec rabbitmq rabbitmqctl set_permissions -p homework app_user ".*" ".*" ".*"
+
+      - docker compose exec rabbitmq rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management
+      - docker compose exec rabbitmq rabbitmqadmin -u app_user -p rabbitmq --vhost=homework declare exchange name=waymark type=direct
+      - docker compose exec rabbitmq rabbitmqadmin -u app_user -p rabbitmq --vhost=homework declare queue name=fhir-inbound durable=true
+      - docker compose exec rabbitmq rabbitmqadmin -u app_user -p rabbitmq --vhost=homework declare binding source=waymark routing_key="inbound" destination=fhir-inbound
+
+  load-fhir:
+    dir: docker
+    cmds:
+      - cmd: |-
+          jq -rc ".resources[]" ../fhir.json | docker compose exec -T rabbitmq bash -c '
+            while IFS= read -r line; do
+              rabbitmqadmin -u app_user -p rabbitmq --vhost=homework publish exchange=waymark routing_key="inbound" payload="$line"
+            done
+          '
+
+  destroy:
+    desc: "Destroy the project"
+    dir: docker
+    ignore_error: true
+    cmds:
+      - docker compose exec rabbitmq rabbitmqctl delete_vhost homework
+      - docker compose exec rabbitmq rabbitmqctl delete_user app_user
+      - task: docker:down
+
+  rabbitmq:ui:
+    desc: "Open RabbitMQ Management UI"
+    silent: true
+    cmds:
+      - echo "Credentials => user:admin, password:rabbitmq"
+      - echo "URL         => http://localhost:15672"
