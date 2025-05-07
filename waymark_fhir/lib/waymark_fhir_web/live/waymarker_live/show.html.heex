@@ -1,0 +1,73 @@
+<div class="container mx-auto px-4 py-8">
+  <div class="mb-8">
+    <.link navigate={~p"/waymarkers"} class="text-indigo-600 hover:text-indigo-800">
+      ← Back to Waymarkers
+    </.link>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6">
+    <h2 class="text-2xl font-bold mb-6">Waymarker Details</h2>
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold mb-2">
+        {@waymarker.first_name} {@waymarker.last_name}
+      </h1>
+      <p class="text-gray-600">{@waymarker.role}</p>
+      <p class="text-sm text-gray-500">{@waymarker.email}</p>
+      <p class="text-sm text-gray-500">{@waymarker.phone_number}</p>
+      <p class="text-sm text-gray-500">Organization: {@waymarker.organization.name}</p>
+    </div>
+
+    <div class="mt-8">
+      <h3 class="text-xl font-semibold mb-4">Encounters</h3>
+      <%= if Enum.empty?(@waymarker.encounters) do %>
+        <p class="text-gray-500">No encounters found.</p>
+      <% else %>
+        <div class="grid gap-4">
+          <%= for encounter <- @waymarker.encounters do %>
+            <div class="border rounded p-4">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="font-medium">{encounter.type}</p>
+                  <p class="text-sm text-gray-600">Status: {encounter.status}</p>
+                  <p class="text-sm text-gray-500 mt-2">{encounter.notes}</p>
+                </div>
+                <div class="text-sm text-gray-500">
+                  {Calendar.strftime(encounter.inserted_at, "%B %d, %Y")}
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
+  <%= if @related_patients != [] do %>
+    <div class="bg-white shadow rounded-lg p-6 mt-8">
+      <h2 class="text-2xl font-bold mb-4">Related Patients</h2>
+      <div class="grid gap-4">
+        <%= for patient <- @related_patients do %>
+          <div class="border rounded p-4">
+            <h3 class="font-semibold">{patient.first_name} {patient.last_name}</h3>
+            <p class="text-gray-600">DOB: {Calendar.strftime(patient.birthday, "%B %d, %Y")}</p>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <%= if @related_encounters != [] do %>
+    <div class="bg-white shadow rounded-lg p-6 mt-8">
+      <h2 class="text-2xl font-bold mb-4">Related Encounters</h2>
+      <div class="grid gap-4">
+        <%= for encounter <- @related_encounters do %>
+          <div class="border rounded p-4">
+            <h3 class="font-semibold">{encounter.type}</h3>
+            <p class="text-gray-600">Status: {encounter.status}</p>
+            <p class="text-gray-600">Notes: {encounter.notes}</p>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>
