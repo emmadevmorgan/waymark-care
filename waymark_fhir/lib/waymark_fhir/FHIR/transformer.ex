@@ -107,34 +107,43 @@ defmodule WaymarkFhir.FHIR.Transformer do
   def transform_encounter(%{"id" => id} = data) do
     Logger.info("Transforming encounter: #{inspect(data)}")
 
-    with {:ok, waymarker_id, patient_id} <- extract_participants(data),
-         _ =
-           Logger.info("Found participants - waymarker: #{waymarker_id}, patient: #{patient_id}"),
-         waymarker when not is_nil(waymarker) <-
-           Repo.get_by(Waymarker, external_identifier: waymarker_id),
-         _ = Logger.info("Found waymarker: #{inspect(waymarker)}"),
-         patient when not is_nil(patient) <-
-           Repo.get_by(Patient, external_identifier: patient_id),
-         _ = Logger.info("Found patient: #{inspect(patient)}") do
-      encounter = %Encounter{
-        external_identifier: id,
-        type: extract_encounter_type(data),
-        status: extract_encounter_status(data),
-        notes: extract_encounter_notes(data),
-        waymarker_id: waymarker.id,
-        patient_id: patient.id
-      }
+    type = extract_encounter_type(data)
 
-      Logger.info("Created encounter: #{inspect(encounter)}")
-      {:ok, encounter}
+    if is_nil(type) do
+      Logger.error("Encounter type is missing for resource: #{inspect(data)}")
+      {:error, :missing_encounter_type}
     else
-      nil ->
-        Logger.error("Failed to find waymarker or patient")
-        {:error, :participant_not_found}
+      with {:ok, waymarker_id, patient_id} <- extract_participants(data),
+           _ =
+             Logger.info(
+               "Found participants - waymarker: #{waymarker_id}, patient: #{patient_id}"
+             ),
+           waymarker when not is_nil(waymarker) <-
+             Repo.get_by(Waymarker, external_identifier: waymarker_id),
+           _ = Logger.info("Found waymarker: #{inspect(waymarker)}"),
+           patient when not is_nil(patient) <-
+             Repo.get_by(Patient, external_identifier: patient_id),
+           _ = Logger.info("Found patient: #{inspect(patient)}") do
+        encounter = %Encounter{
+          external_identifier: id,
+          type: type,
+          status: extract_encounter_status(data),
+          notes: extract_encounter_notes(data),
+          waymarker_id: waymarker.id,
+          patient_id: patient.id
+        }
 
-      error ->
-        Logger.error("Error transforming encounter: #{inspect(error)}")
-        error
+        Logger.info("Created encounter: #{inspect(encounter)}")
+        {:ok, encounter}
+      else
+        nil ->
+          Logger.error("Failed to find waymarker or patient")
+          {:error, :participant_not_found}
+
+        error ->
+          Logger.error("Error transforming encounter: #{inspect(error)}")
+          error
+      end
     end
   end
 
@@ -197,8 +206,10 @@ defmodule WaymarkFhir.FHIR.Transformer do
     case Enum.find_value(participants, fn
            %{"actor" => %{"reference" => "Practitioner/" <> practitioner_id}} ->
              practitioner_id
+
            %{"individual" => %{"reference" => "Practitioner/" <> practitioner_id}} ->
              practitioner_id
+
            _ ->
              nil
          end) do
@@ -210,6 +221,7 @@ defmodule WaymarkFhir.FHIR.Transformer do
   defp extract_participants(_), do: {:error, :invalid_participants}
 
   defp extract_encounter_type(%{"type" => [%{"coding" => [%{"display" => type}]}]}), do: type
+  defp extract_encounter_type(%{"class" => %{"display" => type}}), do: type
   defp extract_encounter_type(_), do: nil
 
   defp extract_encounter_status(%{"status" => status}), do: status
@@ -220,6 +232,7 @@ defmodule WaymarkFhir.FHIR.Transformer do
     |> String.replace(~r/<[^>]*>/, "")
     |> String.trim()
   end
+
   defp extract_encounter_notes(%{"note" => [%{"text" => note}]}), do: note
   defp extract_encounter_notes(_), do: nil
 end

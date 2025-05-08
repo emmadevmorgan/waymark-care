@@ -47,7 +47,7 @@ export SECRET_KEY_BASE=$(mix phx.gen.secret)
 
 ## Prerequisites
 
-- Elixir 1.14
+- Elixir 1.15.7
 - Erlang/OTP 26
 - PostgreSQL
 - RabbitMQ

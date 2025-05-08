@@ -9,18 +9,20 @@ defmodule WaymarkFhir.Messaging.Consumer do
   @impl true
   def init(_opts) do
     rabbitmq_config = Application.get_env(:waymark_fhir, :rabbitmq)
-    
-    connection_params = cond do
-      Keyword.has_key?(rabbitmq_config, :url) -> 
-        Keyword.get(rabbitmq_config, :url)
-      true ->
-        host = Keyword.get(rabbitmq_config, :host)
-        port = Keyword.get(rabbitmq_config, :port)
-        username = Keyword.get(rabbitmq_config, :username)
-        password = Keyword.get(rabbitmq_config, :password)
-        vhost = Keyword.get(rabbitmq_config, :virtual_host, "/")
-        "amqp://#{username}:#{password}@#{host}:#{port}/#{vhost}"
-    end
+
+    connection_params =
+      cond do
+        Keyword.has_key?(rabbitmq_config, :url) ->
+          Keyword.get(rabbitmq_config, :url)
+
+        true ->
+          host = Keyword.get(rabbitmq_config, :host)
+          port = Keyword.get(rabbitmq_config, :port)
+          username = Keyword.get(rabbitmq_config, :username)
+          password = Keyword.get(rabbitmq_config, :password)
+          vhost = Keyword.get(rabbitmq_config, :virtual_host, "/")
+          "amqp://#{username}:#{password}@#{host}:#{port}/#{vhost}"
+      end
 
     {:ok, connection} = AMQP.Connection.open(connection_params)
     {:ok, channel} = AMQP.Channel.open(connection)
@@ -42,6 +44,15 @@ defmodule WaymarkFhir.Messaging.Consumer do
         case WaymarkFhir.FHIR.Transformer.transform(resource) do
           {:ok, transformed} ->
             Logger.info("Transformed resource: #{inspect(transformed)}")
+
+            case WaymarkFhir.Query.create_or_update_record(transformed) do
+              {:ok, record} ->
+                Logger.info("Inserted or updated record: #{inspect(record)}")
+
+              {:error, changeset} ->
+                Logger.error("Failed to insert or update record: #{inspect(changeset)}")
+            end
+
             {:noreply, state}
 
           {:error, reason} ->

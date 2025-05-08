@@ -23,4 +23,4 @@ defmodule WaymarkFhir.MessagingMock do
   def terminate(_reason, _state) do
     :ok
   end
-end 
+end
